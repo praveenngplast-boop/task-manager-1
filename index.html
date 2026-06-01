@@ -586,7 +586,7 @@ tr:hover td { background: rgba(99,179,237,0.03); }
 
 /* FAB */
 .fab {
-  position: fixed; bottom: 28px; left: calc(var(--sidebar-w) + 28px);
+  position: fixed; bottom: 28px; right: 28px;
   width: 50px; height: 50px; border-radius: 50%;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   border: none; color: white; font-size: 22px; cursor: pointer;
@@ -595,7 +595,6 @@ tr:hover td { background: rgba(99,179,237,0.03); }
   transition: var(--trans); z-index: 150;
 }
 .fab:hover { transform: scale(1.1) rotate(90deg); }
-.sidebar.collapsed ~ .main-content ~ .fab { left: calc(var(--sidebar-w-collapsed) + 28px); }
 
 /* ── Upcoming deadlines ── */
 .deadline-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
@@ -616,7 +615,6 @@ tr:hover td { background: rgba(99,179,237,0.03); }
   .sidebar { transform: translateX(-100%); width: 280px; box-shadow: none; }
   .sidebar.mobile-open { transform: translateX(0); box-shadow: var(--shadow-lg); }
   .main-content { margin-left: 0 !important; }
-  .fab { left: 28px; }
   .kanban-board { 
     display: flex; 
     overflow-x: auto; 
@@ -1001,6 +999,7 @@ tr:hover td { background: rgba(99,179,237,0.03); }
         <div class="d-flex gap-2">
           <button class="btn-primary-custom" onclick="saveDailyFocus()"><i class="bi bi-save"></i> Save Focus Items</button>
           <button class="btn-secondary-custom" onclick="addFocusInputRow()"><i class="bi bi-plus-lg"></i> Add Item</button>
+          <button class="btn-secondary-custom" style="color:var(--accent-4); border-color:var(--accent-4)" onclick="moveAllToTomorrow()" title="Move all unfinished tasks to tomorrow"><i class="bi bi-calendar-plus"></i> Move All Unfinished to Tomorrow</button>
         </div>
       </div>
 
@@ -2415,6 +2414,7 @@ function addFocusInputRow(text = '', done = false) {
   div.innerHTML = `
     <input type="checkbox" class="form-check-input mt-0 focus-item-check" ${done ? 'checked' : ''} style="width:20px; height:20px; cursor:pointer">
     <input type="text" class="form-control focus-item-text" value="${text}" placeholder="What's your next goal?" onkeydown="handleFocusInputKey(event)">
+    ${text && !done ? `<button class="btn-sm-action" style="color:var(--accent-4); border-color:var(--accent-4)" onclick="moveItemToTomorrow(this)" title="Move to Tomorrow"><i class="bi bi-calendar-plus"></i></button>` : ''}
     <button class="btn-sm-action danger" onclick="this.parentElement.remove()" title="Remove task"><i class="bi bi-x-lg"></i></button>
   `;
   container.appendChild(div);
@@ -2454,6 +2454,49 @@ function saveDailyFocus() {
   saveDailyLogs(logs);
   toast('Focus items updated', 'success');
   renderDailyFocus();
+}
+
+function moveItemToTomorrow(btn) {
+  const row = btn.parentElement;
+  const text = row.querySelector('.focus-item-text').value.trim();
+  if (!text) return;
+  const logs = getDailyLogs();
+  const tomorrow = tomorrowStr();
+  if (!logs[tomorrow]) logs[tomorrow] = { items: [], timestamp: Date.now() };
+  if (!logs[tomorrow].items.find(i => i.text === text)) {
+    logs[tomorrow].items.push({ text: text, done: false });
+  }
+  saveDailyLogs(logs);
+  row.remove();
+  saveDailyFocus();
+  toast('Moved to tomorrow', 'success');
+}
+
+function moveAllToTomorrow() {
+  const rows = document.querySelectorAll('.focus-input-row');
+  const items = Array.from(rows).map(row => ({
+    text: row.querySelector('.focus-item-text').value.trim(),
+    done: row.querySelector('.focus-item-check').checked
+  })).filter(item => item.text !== '');
+
+  const unfinished = items.filter(item => !item.done);
+  const finished = items.filter(item => item.done);
+
+  if (unfinished.length === 0) { toast('No unfinished items to move', 'info'); return; }
+
+  confirmAction(`Move ${unfinished.length} unfinished tasks to tomorrow?`, () => {
+    const logs = getDailyLogs();
+    const tomorrow = tomorrowStr();
+    if (!logs[tomorrow]) logs[tomorrow] = { items: [], timestamp: Date.now() };
+    unfinished.forEach(u => {
+      if (!logs[tomorrow].items.find(i => i.text === u.text)) logs[tomorrow].items.push({ text: u.text, done: false });
+    });
+
+    logs[todayStr()] = { items: finished, timestamp: Date.now() };
+    saveDailyLogs(logs);
+    renderDailyFocus();
+    toast(`Moved ${unfinished.length} items to tomorrow`, 'success');
+  });
 }
 
 function migrateToToday(oldDate) {
