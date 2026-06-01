@@ -987,6 +987,23 @@ tr:hover td { background: rgba(99,179,237,0.03); }
 
     <!-- ── TODAY ── -->
     <div class="page" id="page-today">
+      <!-- Strategic Daily Focus (Checklist) -->
+      <div class="card-glass" style="padding:24px; margin-bottom:24px; max-width:900px">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+          <div>
+            <div class="form-section-title" style="margin-bottom:2px; font-size:18px; color:var(--accent)">Strategic Daily Focus</div>
+            <div style="font-size:13px; color:var(--text-muted)" id="focusFullDate"></div>
+          </div>
+          <div class="text-end" style="font-family:var(--font-mono); font-size:14px; color:var(--text-secondary)" id="focusTimeDisplay"></div>
+        </div>
+        <div id="focusProgressBar" class="mb-3"></div>
+        <div id="focusInputContainer" class="mb-3"></div>
+        <div class="d-flex gap-2">
+          <button class="btn-primary-custom" onclick="saveDailyFocus()"><i class="bi bi-save"></i> Save Focus Items</button>
+          <button class="btn-secondary-custom" onclick="addFocusInputRow()"><i class="bi bi-plus-lg"></i> Add Item</button>
+        </div>
+      </div>
+
       <div class="card-glass" style="overflow:hidden">
         <div style="padding:16px 20px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--accent)">
           <i class="bi bi-brightness-high me-2"></i>Tasks Due Today — <span id="todayDateLabel"></span>
@@ -1001,6 +1018,9 @@ tr:hover td { background: rgba(99,179,237,0.03); }
           </table>
         </div>
       </div>
+
+      <!-- Daily Focus History -->
+      <div id="focusHistory" class="mt-4" style="max-width:900px"></div>
     </div>
 
     <!-- ── TOMORROW ── -->
@@ -2000,6 +2020,7 @@ function renderToday() {
   document.getElementById('todayDateLabel').textContent = new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   const tasks = getTasks().filter(t=>t.endDate===today&&!t.archived);
   const now = new Date();
+  renderDailyFocus();
   const endOfDay = new Date(); endOfDay.setHours(23,59,59);
   const hoursLeft = Math.max(0, Math.round((endOfDay-now)/3600000));
   document.getElementById('todayTableBody').innerHTML = tasks.length
@@ -2379,6 +2400,164 @@ function filterQuickNav(label) {
     else qf.value='';
     renderTaskTable();
   }, 50);
+}
+
+/* ════════════════════════════════════════════
+   STRATEGIC DAILY FOCUS LOGIC
+════════════════════════════════════════════ */
+function getDailyLogs() { return LS.get('strategic_daily_focus') || {}; }
+function saveDailyLogs(logs) { LS.set('strategic_daily_focus', logs); }
+
+function addFocusInputRow(text = '', done = false) {
+  const container = document.getElementById('focusInputContainer');
+  const div = document.createElement('div');
+  div.className = 'd-flex align-items-center gap-2 mb-2 focus-input-row';
+  div.innerHTML = `
+    <input type="checkbox" class="form-check-input mt-0 focus-item-check" ${done ? 'checked' : ''} style="width:20px; height:20px; cursor:pointer">
+    <input type="text" class="form-control focus-item-text" value="${text}" placeholder="What's your next goal?" onkeydown="handleFocusInputKey(event)">
+    <button class="btn-sm-action danger" onclick="this.parentElement.remove()" title="Remove task"><i class="bi bi-x-lg"></i></button>
+  `;
+  container.appendChild(div);
+  return div;
+}
+
+function handleFocusInputKey(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const newRow = addFocusInputRow();
+    newRow.querySelector('.focus-item-text').focus();
+  }
+}
+
+function toggleFocusPoint(date, index) {
+  const logs = getDailyLogs();
+  if (logs[date] && logs[date].items && logs[date].items[index]) {
+    logs[date].items[index].done = !logs[date].items[index].done;
+    saveDailyLogs(logs);
+    renderDailyFocus();
+  }
+}
+
+function saveDailyFocus() {
+  const rows = document.querySelectorAll('.focus-input-row');
+  const items = Array.from(rows).map(row => ({
+    text: row.querySelector('.focus-item-text').value.trim(),
+    done: row.querySelector('.focus-item-check').checked
+  })).filter(item => item.text !== '');
+
+  if (items.length === 0) { toast('Please add at least one task', 'warning'); return; }
+  
+  const logs = getDailyLogs();
+  const today = todayStr();
+  logs[today] = { items, timestamp: new Date().getTime() };
+  
+  saveDailyLogs(logs);
+  toast('Focus items updated', 'success');
+  renderDailyFocus();
+}
+
+function migrateToToday(oldDate) {
+  const logs = getDailyLogs();
+  const today = todayStr();
+  if (!logs[oldDate] || !logs[oldDate].items) return;
+  
+  const unfinished = logs[oldDate].items.filter(item => !item.done);
+  if (!unfinished.length) { toast('No unfinished items to migrate', 'info'); return; }
+  
+  if (!logs[today]) logs[today] = { items: [], timestamp: Date.now() };
+  unfinished.forEach(item => {
+    if (!logs[today].items.find(i => i.text === item.text)) {
+      logs[today].items.push({ text: item.text, done: false });
+    }
+  });
+  
+  saveDailyLogs(logs);
+  renderDailyFocus();
+  toast(`Migrated ${unfinished.length} items to today`, 'success');
+}
+
+function renderDailyFocus() {
+  const focusPage = document.getElementById('page-today');
+  if (!focusPage || !focusPage.classList.contains('active')) return;
+
+  const logs = getDailyLogs();
+  const today = todayStr();
+  const now = new Date();
+  
+  // Update Dynamic Header
+  document.getElementById('focusFullDate').textContent = fmtDate(today) + ' (' + now.toLocaleDateString('en-IN', { weekday: 'long' }) + ')';
+  document.getElementById('focusTimeDisplay').textContent = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+
+  // Clear and Render Today's Inputs
+  const container = document.getElementById('focusInputContainer');
+  container.innerHTML = '';
+  
+  const todayData = logs[today];
+  let items = [];
+  if (todayData && todayData.items && todayData.items.length > 0) {
+    todayData.items.forEach(item => addFocusInputRow(item.text, item.done));
+    items = todayData.items;
+  } else {
+    addFocusInputRow();
+  }
+
+  // Render Progress Bar
+  const total = items.length;
+  const doneCount = items.filter(i => i.done).length;
+  const percent = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+  document.getElementById('focusProgressBar').innerHTML = `
+    <div class="d-flex justify-content-between align-items-center mb-1">
+      <span style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase">Completion Status</span>
+      <span style="font-size:12px; font-family:var(--font-mono); color:var(--accent)">${percent}%</span>
+    </div>
+    <div class="progress-track" style="height:8px; width:100%">
+      <div class="progress-fill" style="--target-width:${percent}%; background:linear-gradient(90deg, var(--accent), var(--accent-3))"></div>
+    </div>
+  `;
+
+  // Prune & History Logic
+  const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
+  const allKeys = Object.keys(logs).sort((a, b) => b.localeCompare(a));
+  const filteredKeys = allKeys.filter(date => {
+    const logDate = new Date(date).getTime();
+    return (now - logDate) < thirtyDaysInMs;
+  });
+  if (allKeys.length !== filteredKeys.length) { saveDailyLogs(filteredKeys.reduce((o, k) => ({ ...o, [k]: logs[k] }), {})); }
+
+  // Render history (excluding today)
+  const historyHtml = filteredKeys.filter(k => k !== today).map(date => {
+    const data = logs[date];
+    const histItems = data.items || [];
+    const unfinished = histItems.filter(i => !i.done);
+    
+    const migrateBtn = unfinished.length > 0 ? 
+      `<button class="btn-sm-action ms-auto" style="font-size:10px; width:auto; padding:0 8px; border-color:var(--accent-4); color:var(--accent-4)" onclick="migrateToToday('${date}')">
+         <i class="bi bi-arrow-up-circle me-1"></i>Migrate ${unfinished.length} Unfinished
+       </button>` : '';
+
+    const pointsHtml = histItems.filter(i => i.text.trim()).map((item, idx) => `
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px; font-size:13.5px; opacity: ${item.done ? 0.6 : 1}">
+        <i class="bi ${item.done ? 'bi-check-circle-fill' : 'bi-circle'} " onclick="toggleFocusPoint('${date}', ${idx})" style="color:${item.done ? 'var(--accent-3)' : 'var(--text-muted)'}; cursor:pointer"></i>
+        <span style="flex:1; text-decoration: ${item.done ? 'line-through' : 'none'}">${item.text}</span>
+      </div>
+    `).join('');
+
+    return `
+      <div class="card-glass" style="padding:16px; margin-bottom:12px; opacity:0.9">
+        <div class="d-flex align-items-center mb-2 pb-2" style="border-bottom:1px solid var(--border)">
+          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px">
+            <i class="bi bi-calendar-event me-2"></i>${fmtDate(date)}
+          </div>
+          ${migrateBtn}
+        </div>
+        <div class="daily-points-list">${pointsHtml || '<span style="color:var(--text-muted); font-style:italic;">No tasks recorded</span>'}</div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('focusHistory').innerHTML = filteredKeys.length > (logs[today] ? 1 : 0) 
+    ? `<div class="form-section-title mt-4">Strategic Focus History (Last 30 Days)</div>` + historyHtml 
+    : '';
 }
 
 /* ════════════════════════════════════════════
