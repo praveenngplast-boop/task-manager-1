@@ -48,25 +48,25 @@
 }
 
 [data-theme="dark"] {
-  --bg-base: #15111f;
-  --bg-grad-1: #1a1530;
-  --bg-grad-2: #241626;
-  --surface: rgba(38, 31, 58, 0.55);
-  --surface-strong: rgba(43, 35, 64, 0.78);
-  --surface-border: rgba(255, 255, 255, 0.08);
-  --text-primary: #f1eefc;
-  --text-secondary: #b6aed4;
-  --text-faint: #837c9e;
+  --bg-base: #0d1117; /* Very dark blue-grey */
+  --bg-grad-1: #161b22; /* Slightly lighter dark blue */
+  --bg-grad-2: #1f242a; /* Slightly warmer dark blue */
+  --surface: rgba(22, 27, 34, 0.6); /* Translucent dark surface */
+  --surface-strong: rgba(22, 27, 34, 0.85); /* More opaque dark surface */
+  --surface-border: rgba(60, 60, 60, 0.2); /* Subtle grey border */
+  --text-primary: #e6edf3; /* Warm white */
+  --text-secondary: #8b949e; /* Desaturated light grey */
+  --text-faint: #6e7681; /* Darker grey */
 
-  --violet: #8a6ef9;
-  --violet-deep: #c4b5fd;
-  --violet-soft: rgba(138, 110, 249, 0.16);
-  --amber: #f5a93e;
-  --amber-soft: rgba(245, 169, 62, 0.14);
-  --mint: #3fcb96;
-  --mint-soft: rgba(63, 203, 150, 0.14);
-  --rose: #f0708a;
-  --rose-soft: rgba(240, 112, 138, 0.14);
+  --violet: #58a6ff; /* Vibrant blue */
+  --violet-deep: #388bfd; /* Deeper blue */
+  --violet-soft: rgba(56, 139, 253, 0.15); /* Soft blue for backgrounds */
+  --amber: #f5a93e; /* Keep amber */
+  --amber-soft: rgba(245, 169, 62, 0.14); /* Keep amber soft */
+  --mint: #3fcb96; /* Keep mint */
+  --mint-soft: rgba(63, 203, 150, 0.14); /* Keep mint soft */
+  --rose: #f0708a; /* Keep rose */
+  --rose-soft: rgba(240, 112, 138, 0.14); /* Keep rose soft */
 
   --low: #3fcb96;
   --medium: #f5a93e;

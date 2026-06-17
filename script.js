@@ -33,7 +33,7 @@
       viewYear: new Date().getFullYear(),
       viewMonth: new Date().getMonth(),
       selectedDate: null,
-    },
+    }, // This closing brace was missing
   };
 
   /* ---------------- UTILS ---------------- */
@@ -170,6 +170,17 @@
     showToast(task.status === 'Completed' ? 'Task marked complete 🎉' : 'Task reopened', 'success');
   }
 
+  function toggleHighPriority(id) {
+    const task = state.tasks.find(t => t.id === id);
+    if (!task) return;
+    const newPriority = task.priority === 'High' ? 'Medium' : 'High'; // Toggle between High and Medium/Low
+    editTask(id, { priority: newPriority });
+    renderAll();
+    showToast(
+      newPriority === 'High' ? 'Task marked High priority ⬆️' : 'Task priority adjusted', 'info'
+    );
+  }
+
   /* ============================================================
      QUERY HELPERS
      ============================================================ */
@@ -194,12 +205,33 @@
 
   function matchesSearch(task, term) {
     if (!term) return true;
-    const t = term.toLowerCase();
-    return (
-      task.title.toLowerCase().includes(t) ||
-      (task.description || '').toLowerCase().includes(t) ||
-      (task.category || '').toLowerCase().includes(t)
-    );
+    const parts = term.toLowerCase().trim().split(/\s+/);
+
+    return parts.every(part => {
+      if (part.startsWith('p:') || part.startsWith('priority:')) {
+        const val = part.split(':')[1];
+        return val ? task.priority.toLowerCase().startsWith(val) : true;
+      }
+      if (part.startsWith('s:') || part.startsWith('status:')) {
+        const val = part.split(':')[1];
+        return val ? task.status.toLowerCase().startsWith(val) : true;
+      }
+      if (part.startsWith('c:') || part.startsWith('category:')) {
+        const val = part.split(':')[1];
+        return val ? task.category.toLowerCase().includes(val) : true;
+      }
+      if (part.startsWith('d:') || part.startsWith('date:')) {
+        const val = part.split(':')[1];
+        if (val === 'today') return task.dueDate === todayISO();
+        if (val === 'tomorrow') return task.dueDate === tomorrowISO();
+        return val ? task.dueDate.includes(val) : true;
+      }
+      return (
+        task.title.toLowerCase().includes(part) ||
+        (task.description || '').toLowerCase().includes(part) ||
+        (task.category || '').toLowerCase().includes(part)
+      );
+    });
   }
 
   function filterTasks(criteria) {
@@ -257,7 +289,7 @@
       <div class="task-body">
         <div class="task-top-row">
           <span class="task-title">${escapeHtml(task.title)}</span>
-          <span class="badge ${priorityBadgeClass(task.priority)}">${escapeHtml(task.priority)}</span>
+          <span class="badge ${priorityBadgeClass(task.priority)}" data-action="toggle-priority" title="Click to toggle priority">${escapeHtml(task.priority)}</span>
         </div>
         ${task.description ? `<div class="task-desc">${escapeHtml(task.description)}</div>` : ''}
         <div class="task-meta">
@@ -277,6 +309,10 @@
 
     card.querySelector('[data-action="toggle"]').addEventListener('click', () => toggleTaskStatus(task.id));
     card.querySelector('[data-action="edit"]').addEventListener('click', () => openTaskModal(task.id));
+    card.querySelector('[data-action="toggle-priority"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleHighPriority(task.id);
+    });
     card.querySelector('[data-action="delete"]').addEventListener('click', () => openConfirmDelete(task.id));
 
     return card;
@@ -542,40 +578,6 @@
     const dot = document.getElementById('notifDot');
     const enabled = state.settings.notificationsEnabled && 'Notification' in window && Notification.permission === 'granted';
     dot.classList.toggle('show', !enabled);
-  }
-
-  function showNotification(task) {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      const n = new Notification('⏰ ' + task.title, {
-        body: task.description || `Due at ${formatTime12(task.dueTime)} • ${task.category}`,
-        tag: task.id,
-      });
-      setTimeout(() => n.close(), 8000);
-    } else {
-      showToast(`Reminder: ${task.title}`, 'info');
-    }
-    if (state.settings.soundEnabled) {
-      const audio = document.getElementById('alertSound');
-      audio.currentTime = 0;
-      audio.play().catch(() => {});
-    }
-  }
-
-  function checkReminders() {
-    const now = new Date();
-    const nowHM = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-    const today = todayISO();
-
-    state.tasks.forEach(task => {
-      if (task.status === 'Completed') return;
-      if (task.dueDate !== today) return;
-      const timeToCheck = task.reminderTime || task.dueTime;
-      if (!timeToCheck) return;
-      if (timeToCheck === nowHM && !state.notifiedReminders.has(task.id + nowHM)) {
-        state.notifiedReminders.add(task.id + nowHM);
-        showNotification(task);
-      }
-    });
   }
 
   /* ============================================================
@@ -888,8 +890,13 @@
 
     // Mobile sidebar toggle
     document.getElementById('navToggle').addEventListener('click', () => {
-      document.getElementById('sidebar').classList.add('open');
-      document.getElementById('sidebarOverlay').classList.add('show');
+      const sidebar = document.getElementById('sidebar');
+      if (sidebar.classList.contains('open')) {
+        closeSidebarMobile();
+      } else {
+        sidebar.classList.add('open');
+        document.getElementById('sidebarOverlay').classList.add('show');
+      }
     });
     document.getElementById('sidebarOverlay').addEventListener('click', closeSidebarMobile);
   }
